@@ -1,0 +1,53 @@
+package com.example.productservice.service;
+
+import com.example.productservice.entity.Product;
+import com.example.productservice.repository.ProductRepository;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+@Service
+public class ProductService {
+
+    @Autowired
+    private ProductRepository repository;
+
+    @Autowired
+    private RedissonClient redissonClient;
+
+    public String buy(Long productId) {
+
+        RLock lock = redissonClient.getLock("lock:product:" + productId);
+
+        try {
+
+            lock.lock();
+
+            Product product = repository.findById(productId).orElse(null);
+
+            if (product == null) {
+                return "Không tìm thấy sản phẩm";
+            }
+
+            if (product.getStock() <= 0) {
+                return "Sản phẩm đã hết hàng";
+            }
+
+            product.setStock(product.getStock() - 1);
+
+            repository.save(product);
+
+            return "Đặt hàng thành công";
+
+        } finally {
+
+            if (lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+
+        }
+
+    }
+
+}
